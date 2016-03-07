@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- encoding: utf-8 -*-
+
 import sys
 import re
 from OpenSSL import SSL
@@ -52,9 +55,32 @@ def request(host, path):
 # If SSL.VERIFY_NONE was used then the verification chain is not followed.
 # if SSL.VERIFY_PEER was used then a callback function returning False will raise an OpenSSL.SSL.Error exception.
 def callback(conn, cert, errno, depth, result):
+    name = cert.get_issuer()
+    
+    print "--------------------------------------------------------"
+    print cert.get_pubkey()
+    print cert.get_serial_number()
+    print cert.get_subject()
+    print cert.get_version()
+    print cert.has_expired()
+    print "--------------------------------------------------------"
+    print name.countryName
+    print name.stateOrProvinceName
+    print name.organizationName
+    print "--------------------------------------------------------"
+    cert = connection.get_peer_certificate()
+    #common_name = cert.get_subject().commonName.decode()
+    regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
+    if re.matches(regex, host_name):
+    	print "yay"
+    else:
+    	print "boo"
+    	
     if depth == 0 and (errno == 9 or errno == 10):
         return False # or raise Exception("Certificate not yet valid or expired")
     return True
+
+# *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
 protocols = {'tlsv1.0': SSL.TLSv1_METHOD, 'tlsv1.1': SSL.TLSv1_1_METHOD, 'tlsv1.2': SSL.TLSv1_2_METHOD, 'sslv3' : SSL.SSLv3_METHOD}
 
@@ -77,6 +103,8 @@ path = '/doodles/about'
 # TODO: STRING DELIMITING FOR CIPHERS LIST; set_cipher_list()
 # TODO: pinned public key option override, check for none
 # TODO: implement SNI
+# TODO: check for revoked certs
+# TODO: Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 # TODO: Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
 
 context = SSL.Context(protocols[options.protocol])
@@ -98,7 +126,7 @@ connection = SSL.Connection(context, s)
 connection.connect((host,443))
 connection.do_handshake()
 
-connection.sendall(request(host, path))
+connection.sendall(request(url.netloc, url.path))
 # [???] What terminates this loop?
 print connection.read(1024)
 
