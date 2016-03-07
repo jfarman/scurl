@@ -18,7 +18,6 @@ def request(host, path):
 host = 'www.google.com'
 path = '/doodles/about'
 
-# the context is the object that will let us create the SSL Layer on top of a socket in order to get an SSL Connection
 context = SSL.Context(SSL.TLSv1_METHOD)
 # context.set_options(SSL.OP_NO_SSLv2)					# ?? DO I NEED TO DO THIS?
 context.set_verify(SSL.VERIFY_NONE, callback)			# ?? WHICH VERFICATION MODE (sets verification mode & callback fn to call when verifying)
