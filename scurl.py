@@ -1,7 +1,9 @@
+import sys
 import re
 from OpenSSL import SSL
 from socket import socket
 from optparse import OptionParser
+from urlparse import urlparse
 
 # https://curl.haxx.se/docs/manpage.html
 
@@ -35,23 +37,50 @@ def initOptionParser():
 	# typically used to alter that default file.
 	parser.add_option("--cacert", action="store", dest="cacert")
 
+	# --allow-state-certs <N>
+	# Tells scurl to accept a certificate C as valid if (a) C is an otherwise valid certificate that has expired
+	# and (b) C expired within the past N days. The argument N to this option must be a nonnegative integer.
+	# If this option is used several times, the last one will be used.
 	parser.add_option("--allow-state-certs", action="store", dest="expiration")
 
+	# --ciphers <list of ciphers>
+	# (SSL) Specifies which ciphers to use in the connection. The list of ciphers must specify valid ciphers.
+	# Read up on SSL cipher list details on this URL: https://www.openssl.org/docs/apps/ciphers.html
+	parser.add_option("--ciphers", action="store", dest="ciphers")
+
+	# --pinnedpublickey (PPK) <file> (the path to a public key in PEM format)
+	# If specified, scurl will only connect to a server if the servers TLS cert is exactly the one contained in the specified file.
+	# Must use the SHA-256 cert fingerprint functionality built into pyOpenSSL to compare the servers cert to the PPK.
+	# If the server sends the scurl client a certificate chain, you should only check that the leaf certificate matches
+	# the pinned public key certificate - ignore any CA certificates that the server sends.
+	# This option overrides the --cacert and --crlfile options. If this option is used several times, the last one will be used.
+	parser.add_option("--pinnedpublickey", action="store", dest="ppkfile")
+	
 	return
 
 def request(host, path):
     return '''GET %s\r\nHTTP/1.0\r\nHost: %s\r\nConnection: close''' % (path, host)
 
-
 parser = OptionParser()
 initOptionParser()
 (options, args) = parser.parse_args()
 
-print options
-print args[0]
+print options 	# also: print args
+
+url = urlparse(args[0])
+print url
+
+if url.scheme == 'https':
+	print "yay"
+else:
+	sys.exit('Error!')
 
 host = 'www.google.com'
 path = '/doodles/about'
+
+# TODO: URL PARSING
+# TODO: STRING DELIMITING FOR CIPHERS LIST
+# TODO: pinned public key option override, check for none
 
 context = SSL.Context(SSL.TLSv1_METHOD)
 # context.set_options(SSL.OP_NO_SSLv2)					# ?? DO I NEED TO DO THIS?
