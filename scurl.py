@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python python2.7
 # -*- encoding: utf-8 -*-
 
 import sys
@@ -55,6 +55,8 @@ def initOptionParser():
 	return
 
 def request(host, path):
+    # [???] Add a user agent
+    # [???] Connection close header (this is good)
     return '''GET %s\r\nHTTP/1.0\r\nHost: %s\r\nConnection: close''' % (path, host)
 
 def printCertificateInfo(cert):
@@ -72,11 +74,11 @@ def printCertificateInfo(cert):
 	print "--------------------------------------------------------"
 	return
 
-def verify_cb(conn, cert, errnum, depth, ok):
-    certsubject = crypto.X509Name(cert.get_subject())
-    commonname = certsubject.commonName
-    print('Got certificate: ' + commonname)
-    return ok
+# [???] How do we get the current time, and how do we factor in the N days?
+def checkStaleCerts(cert):
+ 	if options.cacert is not None:
+		print "checking for stale certificates"
+ 	return False
 
 # The behavior when callback returns false depends on the verification method set.
 # If SSL.VERIFY_NONE was used then the verification chain is not followed.
@@ -86,46 +88,23 @@ def callback(conn, cert, errnum, depth, result):
 	commonname = certsubject.commonName
 	print('Got certificate: ' + commonname)
 
-	#regex = commonname.replace('.', r'\.').replace('*',r'.*') + '$'
-	#match = re.search(regex, url.netloc)
-	#if not match:
-		#print "Host name doesn't properly match!"
-		#return False
+	# [???] TODO: Wildcards URI / WILDCARD / NAKED DOMAIN / SAN NOT WORKING
+	# [???] Ask Megan about this
+	for i in range(0, cert.get_extension_count()):
+		extension = cert.get_extension(i)
+		#print extension
 	if errnum == CERTIFICATE_EXPIRED:
-		print "expired bitch"
-	if errnum != 0:
+		print cert.get_notAfter()
+		return checkStaleCerts(cert)
+	elif errnum != 0:
 		print('Error number: ' + str(errnum))
 		return False
 	else:
 		return True
+	# PREVERIFY OK
 
-	#if depth == 0 and (errnum == 9 or errnum == 10):
-		#return False # or raise Exception("Certificate not yet valid or expired")
-	#return True
-
-	# printCertificateInfo(cert)
-
-	       #if preverifyOK:
-            #if self.hostname != x509.get_subject().commonName:
-                #return False
-        #return preverifyOK
-    
-    # cert = connection.get_peer_certificate()
-    # common_name = cert.get_subject().commonName.decode()
-    # print common_name
-    # regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
-    # if re.matches(regex, host_name):
-    	#print "yay"
-    #else:
-    	#print "boo"
-
-def getCipherList():
-	cphrstr = options.ciphers
-	cipher_list = cphrstr.split(':')
-	return cipher_list
-
-# TODO: Wildcards [???] URI / WILDCARD / NAKED DOMAIN / SAN NOT WORKING
 def validCertificate(connection):
+	# [???] Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 	cert = connection.get_peer_certificate()
 	common_name = cert.get_subject().commonName.decode()
 	#print common_name
@@ -154,25 +133,21 @@ parser = OptionParser()
 initOptionParser()
 (options, args) = parser.parse_args()
 
-print options 	# also: print args
-
 url = urlparse(args[0])
 print url
 
 if url.scheme != 'https':
 	sys.exit('Error!')
 
-
-# TODO: pinned public key option override, check for none
-# TODO: check for revoked certs
-# TODO: Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
-# TODO: Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
-# TODO: Disabling Old Versions of SSL/TLS?
-# TODO: Scurl on ports other than 443
-# TODO: PRE-VERIFY OK?
+# 1. TODO: pinned public key option override, check for none [https://curl.haxx.se/libcurl/c/CURLOPT_PINNEDPUBLICKEY.html]
+# 2. TODO: check for revoked certs
+# 3. TODO: print out all of HTTP reponse (using a loop?)
+# 4. TODO: implement port functionality so that it will work on ports other than 443
+# 5. TODO: answer questions: disabling Old Versions of SSL/TLS? PRE-VERIFY OK? non-zero exit code?
+# 6. TODO: why is the grading script not working?
 
 context = SSL.Context(protocols[options.protocol])
-# [???] Is this overridden by --CACERT
+# [???] Is this overridden by --cacert 																						[xxxxxx]
 context.set_default_verify_paths()
 
 #if crlfile is not None:
@@ -183,7 +158,7 @@ if options.cacert is not None:
 
 if options.ciphers is not None:
 	# Specifies which ciphers to use in the connection. The list of ciphers must specify valid ciphers. 
-	context.set_cipher_list(getCipherList())					# [???] TypeError: cipher_list must be bytes or unicode
+	context.set_cipher_list(options.ciphers)
 
 # [???] Are there any options I need to set? What does load_verify_locations mean?
 # context.set_options(SSL.OP_NO_SSLv2)
@@ -194,12 +169,9 @@ context.set_verify(SSL.VERIFY_PEER, callback)
 
 # [???] Do I need to do <<s.settimeout(5)>>? What about socket arguments, ie <<socket(socket.AF_INET, socket.SOCK_STREAM)>>?
 # [???] What about try catch for socket connection (or for handshake), ie <<except SSL.WantReadError>>?
-# [???] Should I specify the default port (ie port 443)?
 
-# [???] For TCP, is socket.SOCK_STREAM necessary?
-# [???] Closing the connection?
 s = socket()
-connection = SSL.Connection(context, s)
+connection = SSL.Connection(context, s)			# [???] For TCP, is socket.SOCK_STREAM necessary?
 connection.connect((url.netloc,443))			# or is s.connect(host, port) [???]
 
 connection.set_connect_state()
@@ -213,7 +185,10 @@ except SSL.Error:
 if not validCertificate(connection):
 	sys.exit('Invalid certificate (Host name not matching!)')
 
+# [???] Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
 connection.sendall(request(url.netloc, url.path))
 # [???] What terminates this loop?
 print connection.read(1024)
+
+# [???] Closing the connection?
 
