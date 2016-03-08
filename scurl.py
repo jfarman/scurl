@@ -13,6 +13,9 @@ from urlparse import urlparse
 
 # *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
+# Error code constants found here: http://hugoduncan.org/austenite/src/openssl-sys/lib.rs.html#137-193
+CERTIFICATE_EXPIRED = 10
+
 def initOptionParser():
 	parser.add_option("--tlsv1.0", action="store_const", const="tlsv1.0", dest="protocol", default="tlsv1.2", help="todo")
 	parser.add_option("--tlsv1.1", action="store_const", const="tlsv1.1", dest="protocol", default="tlsv1.2", help="todo")
@@ -82,15 +85,19 @@ def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
 	print('Got certificate: ' + commonname)
-	print('Error number: ' + str(errnum))
 
 	#regex = commonname.replace('.', r'\.').replace('*',r'.*') + '$'
 	#match = re.search(regex, url.netloc)
 	#if not match:
 		#print "Host name doesn't properly match!"
 		#return False
+	if errnum == CERTIFICATE_EXPIRED:
+		print "expired bitch"
 	if errnum != 0:
+		print('Error number: ' + str(errnum))
 		return False
+	else:
+		return True
 
 	#if depth == 0 and (errnum == 9 or errnum == 10):
 		#return False # or raise Exception("Certificate not yet valid or expired")
@@ -112,20 +119,32 @@ def callback(conn, cert, errnum, depth, result):
     #else:
     	#print "boo"
 
+def getCipherList():
+	cphrstr = options.ciphers
+	cipher_list = cphrstr.split(':')
+	return cipher_list
 
-def checkCertificate(connection):
+# TODO: Wildcards [???] URI / WILDCARD / NAKED DOMAIN / SAN NOT WORKING
+def validCertificate(connection):
 	cert = connection.get_peer_certificate()
 	common_name = cert.get_subject().commonName.decode()
-	print common_name
+	#print common_name
+
+	#regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
+	#http://stackoverflow.com/questions/35820618/matching-only-leftmost-wildcard-in-the-domain-name-python
+	#regex = r'(?:^|\s)(\w+\.)?' + common_name.replace('.', '\.')[3:] + '(?:$|\s)'
 
 	regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
-	match = re.search(regex, url.netloc)
-	if not match:
-		print "Host name doesn't properly match!"
-		return False
-	else:
-		print "Match is successful!"
-	return
+	#print "# *. · ° ▪ ° · .*. · ° ▪ ° · .*"
+	#print common_name
+	#print url.netloc
+	#regex_temp = common_name.replace('.', r'\.')
+	#print regex_temp
+	#regex = regex_temp.replace('*',r'.*') + '$'
+	#print regex
+	#print "# *. · ° ▪ ° · .*. · ° ▪ ° · .*"
+	match = re.match(regex, url.netloc)
+	return match
 
 # *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
@@ -143,18 +162,28 @@ print url
 if url.scheme != 'https':
 	sys.exit('Error!')
 
-# TODO: STRING DELIMITING FOR CIPHERS LIST; set_cipher_list()
+
 # TODO: pinned public key option override, check for none
-# TODO: implement SNI
 # TODO: check for revoked certs
 # TODO: Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 # TODO: Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
 # TODO: Disabling Old Versions of SSL/TLS?
-# TODO: Wildcards
 # TODO: Scurl on ports other than 443
 # TODO: PRE-VERIFY OK?
 
 context = SSL.Context(protocols[options.protocol])
+# [???] Is this overridden by --CACERT
+context.set_default_verify_paths()
+
+#if crlfile is not None:
+	#crypto.load_crl(type, buffer) [???]
+
+if options.cacert is not None:
+	context.use_certificate_file(options.cacert)
+
+if options.ciphers is not None:
+	# Specifies which ciphers to use in the connection. The list of ciphers must specify valid ciphers. 
+	context.set_cipher_list(getCipherList())					# [???] TypeError: cipher_list must be bytes or unicode
 
 # [???] Are there any options I need to set? What does load_verify_locations mean?
 # context.set_options(SSL.OP_NO_SSLv2)
@@ -179,9 +208,10 @@ connection.set_tlsext_host_name(url.netloc)		# will this help implement SNI [???
 try:
 	connection.do_handshake()
 except SSL.Error:
-	sys.exit('Error!')
+	sys.exit('Error!!!')
 
-checkCertificate(connection)
+if not validCertificate(connection):
+	sys.exit('Invalid certificate (Host name not matching!)')
 
 connection.sendall(request(url.netloc, url.path))
 # [???] What terminates this loop?
