@@ -51,7 +51,7 @@ do
     ARGS=${ARGS//\$TEST_DIR/$DIRECTORY}
     PWD=`pwd`
 
-    $SCURL $ARGS > $TMP_OUT 2> $TMP_ERR
+    ( $SCURL $ARGS ) > $TMP_OUT 2> $TMP_ERR
     RET=$?
 
     PASS=1
