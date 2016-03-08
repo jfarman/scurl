@@ -4,17 +4,20 @@
 import sys
 import re
 from OpenSSL import SSL
+from OpenSSL import crypto
 from socket import socket
 from optparse import OptionParser
 from urlparse import urlparse
 
 # https://curl.haxx.se/docs/manpage.html
 
+# *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
+
 def initOptionParser():
-	parser.add_option("--tlsv1.0", action="store_const", const="tlsv1.0", dest="protocol", default="--tlsv1.2", help="todo")
-	parser.add_option("--tlsv1.1", action="store_const", const="tlsv1.1", dest="protocol", default="--tlsv1.2", help="todo")
-	parser.add_option("--tlsv1.2", action="store_const", const="tlsv1.2", dest="protocol", default="--tlsv1.2", help="todo")
-	parser.add_option("--sslv3", "-3", action="store_const", const="sslv3", dest="protocol", default="--tlsv1.2", help="todo")
+	parser.add_option("--tlsv1.0", action="store_const", const="tlsv1.0", dest="protocol", default="tlsv1.2", help="todo")
+	parser.add_option("--tlsv1.1", action="store_const", const="tlsv1.1", dest="protocol", default="tlsv1.2", help="todo")
+	parser.add_option("--tlsv1.2", action="store_const", const="tlsv1.2", dest="protocol", default="tlsv1.2", help="todo")
+	parser.add_option("--sslv3", "-3", action="store_const", const="sslv3", dest="protocol", default="tlsv1.2", help="todo")
 
 	# --crlfile <file>
 	# (HTTPS/FTPS) Provide a file using PEM format with a Certificate Revocation List that may specify peer certificates that
@@ -51,34 +54,59 @@ def initOptionParser():
 def request(host, path):
     return '''GET %s\r\nHTTP/1.0\r\nHost: %s\r\nConnection: close''' % (path, host)
 
+def printCertificateInfo(cert):
+	name = cert.get_issuer() 
+	print "--------------------------------------------------------"
+	print cert.get_pubkey()
+	print cert.get_serial_number()
+	print cert.get_subject()
+	print cert.get_version()
+	print cert.has_expired()
+	print "--------------------------------------------------------"
+	print name.countryName
+	print name.stateOrProvinceName
+	print name.organizationName
+	print "--------------------------------------------------------"
+	return
+
+def verify_cb(conn, cert, errnum, depth, ok):
+    certsubject = crypto.X509Name(cert.get_subject())
+    commonname = certsubject.commonName
+    print('Got certificate: ' + commonname)
+    return ok
+
 # The behavior when callback returns false depends on the verification method set.
 # If SSL.VERIFY_NONE was used then the verification chain is not followed.
 # if SSL.VERIFY_PEER was used then a callback function returning False will raise an OpenSSL.SSL.Error exception.
-def callback(conn, cert, errno, depth, result):
-    name = cert.get_issuer()
+def callback(conn, cert, errnum, depth, result):
+	certsubject = crypto.X509Name(cert.get_subject())
+	commonname = certsubject.commonName
+	print('Got certificate: ' + commonname)
+
+	regex = commonname.replace('.', r'\.').replace('*',r'.*') + '$'
+	match = re.search(regex, url.netloc)
+	if not match:
+		return False
+
+	if depth == 0 and (errnum == 9 or errnum == 10):
+		return False # or raise Exception("Certificate not yet valid or expired")
+	return True
+
+	# printCertificateInfo(cert)
+
+	       #if preverifyOK:
+            #if self.hostname != x509.get_subject().commonName:
+                #return False
+        #return preverifyOK
     
-    print "--------------------------------------------------------"
-    print cert.get_pubkey()
-    print cert.get_serial_number()
-    print cert.get_subject()
-    print cert.get_version()
-    print cert.has_expired()
-    print "--------------------------------------------------------"
-    print name.countryName
-    print name.stateOrProvinceName
-    print name.organizationName
-    print "--------------------------------------------------------"
-    cert = connection.get_peer_certificate()
-    #common_name = cert.get_subject().commonName.decode()
-    regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
-    if re.matches(regex, host_name):
-    	print "yay"
-    else:
-    	print "boo"
-    	
-    if depth == 0 and (errno == 9 or errno == 10):
-        return False # or raise Exception("Certificate not yet valid or expired")
-    return True
+    # cert = connection.get_peer_certificate()
+    # common_name = cert.get_subject().commonName.decode()
+    # print common_name
+    # regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
+    # if re.matches(regex, host_name):
+    	#print "yay"
+    #else:
+    	#print "boo"
 
 # *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
@@ -96,16 +124,13 @@ print url
 if url.scheme != 'https':
 	sys.exit('Error!')
 
-host = 'www.google.com'
-path = '/doodles/about'
-
-
 # TODO: STRING DELIMITING FOR CIPHERS LIST; set_cipher_list()
 # TODO: pinned public key option override, check for none
 # TODO: implement SNI
 # TODO: check for revoked certs
 # TODO: Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 # TODO: Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
+# TODO: Disabling Old Versions of SSL/TLS?
 
 context = SSL.Context(protocols[options.protocol])
 
@@ -121,10 +146,14 @@ context.set_verify(SSL.VERIFY_PEER, callback)
 # [???] Should I specify the default port (ie port 443)?
 
 # [???] For TCP, is socket.SOCK_STREAM necessary?
+# [???] Closing the connection?
 s = socket()
 connection = SSL.Connection(context, s)
-connection.connect((host,443))
-connection.do_handshake()
+connection.connect((url.netloc,443))
+try:
+	connection.do_handshake()
+except SSL.Error:
+	sys.exit('Error!')
 
 connection.sendall(request(url.netloc, url.path))
 # [???] What terminates this loop?
