@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="shortcut icon" href="/icons/favicon-green.ico"/>
+  <link rel="apple-touch-icon" href="/icons/icon-green.png"/>
+  <title>mozilla-modern.badssl.com</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>body { background: green; }</style>
+</head>
+<body>
+<div id="content">
+  <h1>
+    mozilla-modern.<br>badssl.com
+  </h1>
+</div>
+
+<div id="footer">
+  This site uses the Mozilla &ldquo;<a href="https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility">Modern</a>&rdquo; TLS configuration.
+</div>
+
+</body>
+</html>

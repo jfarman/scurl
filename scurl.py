@@ -82,15 +82,19 @@ def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
 	print('Got certificate: ' + commonname)
+	print('Error number: ' + str(errnum))
 
-	regex = commonname.replace('.', r'\.').replace('*',r'.*') + '$'
-	match = re.search(regex, url.netloc)
-	if not match:
+	#regex = commonname.replace('.', r'\.').replace('*',r'.*') + '$'
+	#match = re.search(regex, url.netloc)
+	#if not match:
+		#print "Host name doesn't properly match!"
+		#return False
+	if errnum != 0:
 		return False
 
-	if depth == 0 and (errnum == 9 or errnum == 10):
-		return False # or raise Exception("Certificate not yet valid or expired")
-	return True
+	#if depth == 0 and (errnum == 9 or errnum == 10):
+		#return False # or raise Exception("Certificate not yet valid or expired")
+	#return True
 
 	# printCertificateInfo(cert)
 
@@ -107,6 +111,21 @@ def callback(conn, cert, errnum, depth, result):
     	#print "yay"
     #else:
     	#print "boo"
+
+
+def checkCertificate(connection):
+	cert = connection.get_peer_certificate()
+	common_name = cert.get_subject().commonName.decode()
+	print common_name
+
+	regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
+	match = re.search(regex, url.netloc)
+	if not match:
+		print "Host name doesn't properly match!"
+		return False
+	else:
+		print "Match is successful!"
+	return
 
 # *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
@@ -131,6 +150,9 @@ if url.scheme != 'https':
 # TODO: Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 # TODO: Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
 # TODO: Disabling Old Versions of SSL/TLS?
+# TODO: Wildcards
+# TODO: Scurl on ports other than 443
+# TODO: PRE-VERIFY OK?
 
 context = SSL.Context(protocols[options.protocol])
 
@@ -139,7 +161,7 @@ context = SSL.Context(protocols[options.protocol])
 # context.load_verify_locations(ca_file, ca_path)
 
 # [???] If no server certificate is sent, because an anonymous cipher is used, SSL_VERIFY_PEER is ignored.
-context.set_verify(SSL.VERIFY_PEER, callback)			
+context.set_verify(SSL.VERIFY_PEER, callback)
 
 # [???] Do I need to do <<s.settimeout(5)>>? What about socket arguments, ie <<socket(socket.AF_INET, socket.SOCK_STREAM)>>?
 # [???] What about try catch for socket connection (or for handshake), ie <<except SSL.WantReadError>>?
@@ -149,11 +171,17 @@ context.set_verify(SSL.VERIFY_PEER, callback)
 # [???] Closing the connection?
 s = socket()
 connection = SSL.Connection(context, s)
-connection.connect((url.netloc,443))
+connection.connect((url.netloc,443))			# or is s.connect(host, port) [???]
+
+connection.set_connect_state()
+connection.set_tlsext_host_name(url.netloc)		# will this help implement SNI [???]
+
 try:
 	connection.do_handshake()
 except SSL.Error:
 	sys.exit('Error!')
+
+checkCertificate(connection)
 
 connection.sendall(request(url.netloc, url.path))
 # [???] What terminates this loop?

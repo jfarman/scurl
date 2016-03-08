@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Scurl Test Script
+# Written by Henry Corrigan-Gibbs, 2016
+#       for Stanford CS255
+
+# Halt on ctrl-C
+trap "exit" INT
+
+pushd () {
+    command pushd "$@" > /dev/null
+}
+
+popd () {
+    command popd "$@" > /dev/null
+}
+
+SCURL=$1
+
+if [ -z ${1+x} ]
+then
+  echo "Usage: $0 <your_scurl_executable_here>"
+  exit 1
+fi
+
+if [ ! -e $SCURL ]
+then
+  echo "Cannot find your scurl executable file!"
+  exit 1
+fi
+
+COUNTER=0
+TOTAL=0
+
+TMP_OUT=`mktemp`
+TMP_ERR=`mktemp`
+
+echo "=== Scurl Testing Script ==="
+
+DIRECTORY=`dirname $0`
+
+for test_dir in `ls $DIRECTORY/tests/`
+do
+
+  for test_idx in `ls $DIRECTORY/tests/$test_dir/*.test`
+  do
+    echo "Running test: $test_idx"
+
+    # cd into tests dir so that relative paths work
+    ARGS=`cat $test_idx`
+    ARGS=${ARGS//\$TEST_DIR/$DIRECTORY}
+    PWD=`pwd`
+
+    $SCURL $ARGS > $TMP_OUT 2> $TMP_ERR
+    RET=$?
+
+    PASS=1
+    if [ -e $test_idx.error ]
+    then
+      IS_ERROR=1
+      # Ensure return code is non-zero
+
+      if [ "$RET" -eq "0" ]
+      then
+        PASS=0
+        echo "Expected non-zero return code, got 0"
+      fi
+
+      # Ensure printed only one line to stderr
+      LINES=`cat $TMP_ERR | wc -l`
+      if [ "$LINES" -ne "1" ]
+      then
+        PASS=0
+        echo "Expected one-line error message, got $LINES"
+      fi
+
+    else 
+      IS_ERROR=0
+
+      # Ensure return code is zero
+      if [ "$RET" -ne "0" ]
+      then
+        PASS=0
+        echo "Expected zero return code, got $RET"
+        echo "stderr (for debugging):"
+        cat $TMP_ERR
+      fi
+
+
+      # Ensure output matches
+      diff $test_idx.out $TMP_OUT
+      DIFF=$?
+      if [ "$DIFF" -ne "0" ]
+      then
+        PASS=0
+        echo "Diff failed"
+      fi
+
+    fi
+    if [ "$PASS" -ne "1" ]
+    then
+      echo "--> FAIL"
+    fi
+
+    
+    let COUNTER=COUNTER+PASS
+    let TOTAL=TOTAL+1
+  done
+done
+
+# Clean up tmp files
+rm $TMP_OUT
+rm $TMP_ERR
+
+echo "Tests passed: $COUNTER/$TOTAL"

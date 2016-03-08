@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="shortcut icon" href="/icons/favicon-green.ico"/>
+  <link rel="apple-touch-icon" href="/icons/icon-green.png"/>
+  <title>1000-sans.badssl.com</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>body { background: green; }</style>
+</head>
+<body>
+<div id="content">
+  <h1>
+    1000-sans.<br>badssl.com
+  </h1>
+</div>
+
+<div id="footer">
+  This site uses a certificate with 1000 <a href="https://tools.ietf.org/html/rfc5280#section-4.2.1.6">subjectAltName entries</a>.
+</div>
+
+</body>
+</html>

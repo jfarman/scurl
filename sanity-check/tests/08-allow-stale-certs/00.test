@@ -1,0 +1,1 @@
+--allow-stale-certs 10000 https://expired.badssl.com/
