@@ -76,15 +76,14 @@ def printCertificateInfo(cert):
 
 # [???] How do we get the current time, and how do we factor in the N days?
 def checkStaleCerts(cert):
- 	if options.cacert is not None:
-		print "checking for stale certificates"
+ 	#if options.cacert is not None:
+		#print "checking for stale certificates"
  	return False
 
 def checkAltNames(cert):
  	found = False;
  	for i in range(0, cert.get_extension_count()):
  		extension = cert.get_extension(i)
- 		print extension.get_short_name()
  		if extension.get_short_name() == "subjectAltName":
  			alt_names = crypto.X509Extension._subjectAltNameString(extension)
  			alt_names_arr = alt_names.replace('DNS:', '').split(', ')
@@ -101,7 +100,7 @@ def callback(conn, cert, errnum, depth, result):
 	#print('got certificate: ' + commonname)
 			
 	if errnum == CERTIFICATE_EXPIRED:
-		print cert.get_notAfter()
+		#print cert.get_notAfter()
 		return checkStaleCerts(cert)
 	elif errnum != 0:
 		#print('Error number: ' + str(errnum))
@@ -134,7 +133,6 @@ initOptionParser()
 (options, args) = parser.parse_args()
 
 url = urlparse(args[0])
-print url
 
 if url.scheme != 'https':
 	sys.exit('Error!')
