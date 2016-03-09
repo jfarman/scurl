@@ -42,7 +42,7 @@ DIRECTORY=`dirname $0`
 # for test_dir in `ls $DIRECTORY/tests/00-normal/`
 # do
 
-for test_idx in `ls $DIRECTORY/tests/03-badcert/*.test`
+for test_idx in `ls $DIRECTORY/tests/00-normal/*.test`
 do
     echo "Running test: $test_idx"
 
