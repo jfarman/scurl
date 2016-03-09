@@ -80,22 +80,30 @@ def checkStaleCerts(cert):
 		print "checking for stale certificates"
  	return False
 
+def checkAltNames(cert):
+ 	for i in range(0, cert.get_extension_count()):
+ 		extension = cert.get_extension(i)
+ 		if extension.get_short_name() == "subjectAltName":
+ 			alt_names = crypto.X509Extension._subjectAltNameString(extension)
+ 			alt_names_arr = alt_names.replace('DNS:', '').split(', ')
+ 			if url.netloc in alt_names_arr:
+ 				print "hooray"
+ 			else:
+ 				print "sad times"
+ 		return True
+
 # The behavior when callback returns false depends on the verification method set.
 # If SSL.VERIFY_NONE was used then the verification chain is not followed.
 # if SSL.VERIFY_PEER was used then a callback function returning False will raise an OpenSSL.SSL.Error exception.
 def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
-	print('Got certificate: ' + commonname)
+	print('got certificate: ' + commonname)
 
-	for i in range(0, cert.get_extension_count()):
-		extension = cert.get_extension(i)
-		#if extension.get_short_name() == "subjectAltName":
-			# crypto x509 extension _subjectaltname
-			# alt_names = extension.split(',')
-			# print "-----------"
-			# print alt_names
-			# print "-----------"
+	if depth == 0:
+		#return checkAltNames(cert)
+		print "zero"
+			
 	if errnum == CERTIFICATE_EXPIRED:
 		print cert.get_notAfter()
 		return checkStaleCerts(cert)
@@ -185,8 +193,7 @@ try:
 except SSL.Error:
 	sys.exit('Error!!!')
 
-if not validCertificate(connection):
-	sys.exit('Invalid certificate (Host name not matching!)')
+validCertificate(connection)
 
 # [???] Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
 connection.sendall(request(url.netloc, url.path))
