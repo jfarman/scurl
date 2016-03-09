@@ -106,7 +106,7 @@ do
     let COUNTER=COUNTER+PASS
     let TOTAL=TOTAL+1
   done
-done
+#done
 
 # Clean up tmp files
 rm $TMP_OUT

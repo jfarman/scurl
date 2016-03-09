@@ -190,5 +190,7 @@ connection.sendall(request(url.netloc, url.path))
 
 print "success!"
 
+sys.exit(0)
+
 # [???] Closing the connection?
 
