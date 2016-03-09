@@ -168,11 +168,14 @@ context.set_verify(SSL.VERIFY_PEER, callback)
 # [???] What about try catch for socket connection (or for handshake), ie <<except SSL.WantReadError>>?
 
 s = socket()
+s.settimeout(5)
 connection = SSL.Connection(context, s)			# [???] For TCP, is socket.SOCK_STREAM necessary?
-# TODO: Check if URL contains a specified port, if not, default to 443
-connection.connect((url.netloc,443))			# or is s.connect(host, port) [???]
 
-connection.set_connect_state()
+# TODO: Check if URL contains a specified port, if not, default to 443
+# [?????] [Errno 8] nodename nor servname provided (./scurl https://test1.tls-o-matic.com/)
+connection.connect((url.netloc,443))
+
+connection.set_connect_state()					
 connection.set_tlsext_host_name(url.netloc)		# will this help implement SNI [???]
 
 try:
@@ -188,7 +191,12 @@ connection.sendall(request(url.netloc, url.path))
 # [???] What terminates this loop?
 #print connection.read(1024)
 
+try:
+    recvstr = connection.recv(1024)
+except OpenSSL.SSL.WantReadError:
+    sys.exit('Oops')
 
+print recvstr
 
 print "success!"
 
