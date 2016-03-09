@@ -188,6 +188,8 @@ connection.sendall(request(url.netloc, url.path))
 # [???] What terminates this loop?
 #print connection.read(1024)
 
+
+
 print "success!"
 
 sys.exit(0)
