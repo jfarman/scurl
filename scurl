@@ -174,7 +174,7 @@ except SSL.Error:
 if not validCertificate(connection):
 	sys.exit('Name issue')
 
-print request(url.netloc, url.path)
+#print request(url.netloc, url.path)
 
 connection.sendall(request(url.netloc, url.path))
 
@@ -194,8 +194,6 @@ connection.sendall(request(url.netloc, url.path))
 
 # [?????] Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
 # [?????] I'm getting this error even when I should be getting 404 (./scurl https://sha256.badssl.com/does-not-exist.html)
-
-print "ok"
 
 print connection.read(1024)
 
