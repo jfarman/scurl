@@ -81,16 +81,16 @@ def checkStaleCerts(cert):
  	return False
 
 def checkAltNames(cert):
+ 	found = False;
  	for i in range(0, cert.get_extension_count()):
  		extension = cert.get_extension(i)
+ 		print extension.get_short_name()
  		if extension.get_short_name() == "subjectAltName":
  			alt_names = crypto.X509Extension._subjectAltNameString(extension)
  			alt_names_arr = alt_names.replace('DNS:', '').split(', ')
  			if url.netloc in alt_names_arr:
- 				print "hooray"
- 			else:
- 				print "sad times"
- 		return True
+ 				found = True
+ 	return found
 
 # The behavior when callback returns false depends on the verification method set.
 # If SSL.VERIFY_NONE was used then the verification chain is not followed.
@@ -98,17 +98,13 @@ def checkAltNames(cert):
 def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
-	print('got certificate: ' + commonname)
-
-	if depth == 0:
-		#return checkAltNames(cert)
-		print "zero"
+	#print('got certificate: ' + commonname)
 			
 	if errnum == CERTIFICATE_EXPIRED:
 		print cert.get_notAfter()
 		return checkStaleCerts(cert)
 	elif errnum != 0:
-		print('Error number: ' + str(errnum))
+		#print('Error number: ' + str(errnum))
 		return False
 	else:
 		return True
@@ -118,23 +114,16 @@ def validCertificate(connection):
 	# [???] Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 	cert = connection.get_peer_certificate()
 	common_name = cert.get_subject().commonName.decode()
-	#print common_name
 
-	#regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
-	#http://stackoverflow.com/questions/35820618/matching-only-leftmost-wildcard-in-the-domain-name-python
-	#regex = r'(?:^|\s)(\w+\.)?' + common_name.replace('.', '\.')[3:] + '(?:$|\s)'
+	rxString = r'(?:^|\s)(\w+\.)?' + common_name.replace('.', '\.')[3:] + '(?:$|\s)'
+	regex = re.compile(rxString)
+	match = regex.match(url.netloc)
 
-	regex = common_name.replace('.', r'\.').replace('*',r'.*') + '$'
-	#print "# *. · ° ▪ ° · .*. · ° ▪ ° · .*"
-	#print common_name
-	#print url.netloc
-	#regex_temp = common_name.replace('.', r'\.')
-	#print regex_temp
-	#regex = regex_temp.replace('*',r'.*') + '$'
-	#print regex
-	#print "# *. · ° ▪ ° · .*. · ° ▪ ° · .*"
-	match = re.match(regex, url.netloc)
-	return match
+	alt_match = checkAltNames(cert)
+	if (match or alt_match):
+		return True;
+	else:
+		return False;
 
 # *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
@@ -154,7 +143,7 @@ if url.scheme != 'https':
 # 2. TODO: check for revoked certs
 # 3. TODO: print out all of HTTP reponse (using a loop?)
 # 5. TODO: answer questions: disabling Old Versions of SSL/TLS? non-zero exit code?
-# 6. TODO: why is the grading script not working?
+# 6. TODO: whats all this then? /scurl https://wrong.hostbadssl.com/
 
 context = SSL.Context(protocols[options.protocol])
 # [???] Is this overridden by --cacert 																						[xxxxxx]
@@ -193,12 +182,15 @@ try:
 except SSL.Error:
 	sys.exit('Error!!!')
 
-validCertificate(connection)
+if not validCertificate(connection):
+	sys.exit('Name issue')
 
 # [???] Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
 connection.sendall(request(url.netloc, url.path))
 # [???] What terminates this loop?
-print connection.read(1024)
+#print connection.read(1024)
+
+print "success!"
 
 # [???] Closing the connection?
 
