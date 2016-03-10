@@ -122,6 +122,9 @@ parser = OptionParser()
 initOptionParser()
 (options, args) = parser.parse_args()
 
+if len(args) < 1:
+	sys.exit('Too few arguments!')
+
 url = urlparse(args[0])
 
 if url.scheme != 'https':
