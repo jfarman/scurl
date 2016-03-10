@@ -38,10 +38,10 @@ echo "=== Scurl Testing Script ==="
 
 DIRECTORY=`dirname $0`
 
-for test_dir in `ls $DIRECTORY/tests-simple/`
+for test_dir in `ls $DIRECTORY/test-simple/`
 do
   echo "$test_dir"
-  for test_idx in `ls $DIRECTORY/tests-simple/$test_dir/*.test`
+  for test_idx in `ls $DIRECTORY/test-simple/$test_dir/*.test`
   do
     echo "Running test: $test_idx"
 
