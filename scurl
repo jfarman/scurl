@@ -65,6 +65,7 @@ def request(host, path):
 def checkStaleCerts(cert):
  	#if options.cacert is not None:
 		#print "checking for stale certificates"
+	#date time format
  	return False
 
 def checkAltNames(cert):
@@ -134,6 +135,7 @@ context = SSL.Context(protocols[options.protocol])	# This is overridden by --cac
 
 if options.crlfile is not None:
 	print "loading crl"
+	#need to look at signature of CRL file
 	#crypto.load_crl(type, buffer) [???]
 
 # ./scurl --cacert ./sanity/data/stanford.pem https://sha256.badssl.com/
@@ -195,7 +197,21 @@ connection.sendall(request(url.netloc, url.path))
 # [?????] Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
 # [?????] I'm getting this error even when I should be getting 404 (./scurl https://sha256.badssl.com/does-not-exist.html)
 
-print connection.read(1024)
+header = True;
+while 1:
+	try:
+		block = connection.recv(1024).decode('utf-8')
+		if ("\r\n\r\n" in block and header):
+			str_arr = block.split("\r\n\r\n", 1)
+			block = str_arr[1]
+			header = False;
+		sys.stdout.write(block)
+		sys.stdout.flush()
+	except SSL.Error:
+		break
+
+connection.shutdown()
+connection.close()
 
 #try:
     #recvstr = connection.recv(1024)
