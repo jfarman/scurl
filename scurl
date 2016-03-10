@@ -15,6 +15,7 @@ from urlparse import urlparse
 
 # Error code constants found here: http://hugoduncan.org/austenite/src/openssl-sys/lib.rs.html#137-193
 CERTIFICATE_EXPIRED = 10
+scurl_data = {}
 
 def initOptionParser():
 	parser.add_option("--tlsv1.0", action="store_const", const="tlsv1.0", dest="protocol", default="tlsv1.2", help="todo")
@@ -83,6 +84,8 @@ def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
 	#print('got certificate: ' + commonname)
+	if ((options.crlfile is not None) and isRevoked(cert)):
+		return False
 			
 	if errnum == CERTIFICATE_EXPIRED:
 		#check <if expiration is not None:>
@@ -95,21 +98,12 @@ def callback(conn, cert, errnum, depth, result):
 		return True
 	# PREVERIFY OK
 
-def isRevoked(connection):
-    #with open('path_to_the_crl', 'r') as _crl_file:
-    #crl = "".join(_crl_file.readlines())
-
-    # CHECK IF CRL FILE IS VALID !!!!!!!!!!!!!!
-    cert = connection.get_peer_certificate()
+def isRevoked(cert):
     num = format(cert.get_serial_number(), 'x')
-
-    crl_buffer = open(options.crlfile, 'r').read()
-    crl_object = crypto.load_crl(crypto.FILETYPE_PEM, crl_buffer)
-    revoked_objects = crl_object.get_revoked()
-    for revoked in revoked_objects:
-    	if revoked.get_serial() == num
-    		return True;
-    return False;
+    for r in scurl_data["revoked"]:
+    	if r.get_serial() == num:
+    		return True
+    return False
 
 def validCertificate(connection):
 	# [???] Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
@@ -173,6 +167,21 @@ except socket.error:
 connection.set_connect_state()					
 connection.set_tlsext_host_name(url.netloc)
 
+# ./scurl --crlfile ./sanity/data/sr.pem https://revoked.grc.com/
+if options.crlfile is not None:
+	#with open('path_to_the_crl', 'r') as _crl_file:
+    #crl = "".join(_crl_file.readlines())
+
+    # CHECK IF CRL FILE IS VALID !!!!!!!!!!!!!!
+
+	crl_buffer = open(options.crlfile, 'r').read()
+	crl_object = crypto.load_crl(crypto.FILETYPE_PEM, crl_buffer)
+	revoked_objects = crl_object.get_revoked()
+	scurl_data["revoked"] = revoked_objects
+
+	#isRevoked(connection)):
+	#sys.exit('Revoked bitch')
+
 try:
 	connection.do_handshake()
 except SSL.Error:
@@ -180,10 +189,6 @@ except SSL.Error:
 
 if not validCertificate(connection):
 	sys.exit('Name issue')
-
-# ./scurl --crlfile ./sanity/data/sr.pem https://revoked.grc.com/
-if ((options.crlfile is not None) and (isRevoked(connection)):
-	sys.exit('Revoked bitch')
 
 try:
 	connection.sendall(request(url.netloc, url.path))
