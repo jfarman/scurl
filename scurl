@@ -206,7 +206,7 @@ while 1:
 			str_arr = block.split("\r\n\r\n", 1)
 			block = str_arr[1]
 			header = False;
-		#sys.stdout.write(block)
+		sys.stdout.write(block)
 		sys.stdout.flush()
 	# except SSL.WantReadError
 	except SSL.Error:
