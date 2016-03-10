@@ -15,8 +15,8 @@ from urlparse import urlparse
 
 # Error code constants found here: http://hugoduncan.org/austenite/src/openssl-sys/lib.rs.html#137-193
 CERTIFICATE_EXPIRED = 10
+DEFAULT_PORT = 443
 scurl_data = {}
-printed_r = False
 
 def initOptionParser():
 	parser.add_option("--tlsv1.0", action="store_const", const="tlsv1.0", dest="protocol", default="tlsv1.2", help="todo")
@@ -77,16 +77,24 @@ def checkAltNames(cert):
  		if extension.get_short_name() == "subjectAltName":
  			alt_names = crypto.X509Extension._subjectAltNameString(extension)
  			alt_names_arr = alt_names.replace('DNS:', '').split(', ')
- 			if url.netloc in alt_names_arr:
+ 			if url.hostname in alt_names_arr:
  				found = True
  	return found
+
+def notRevoked(cert):
+    serial_num = format(cert.get_serial_number(), 'X')
+    serial_num_str = str(serial_num)
+    for r in scurl_data["revoked"]:
+    	if r.get_serial() == serial_num_str:
+    		return False
+    return True
 
 def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
 	#print('got certificate: ' + commonname)
-	if ((options.crlfile is not None) and isRevoked(cert)):
-		return False
+	if (options.crlfile is not None):
+		return notRevoked(cert)
 			
 	if errnum == CERTIFICATE_EXPIRED:
 		#check <if expiration is not None:>
@@ -99,14 +107,6 @@ def callback(conn, cert, errnum, depth, result):
 		return True
 	# PREVERIFY OK
 
-def isRevoked(cert):
-    serial_num = format(cert.get_serial_number(), 'X')
-    serial_num_str = str(serial_num)
-    for r in scurl_data["revoked"]:
-    	if r.get_serial() == serial_num_str:
-    		return True
-    return False
-
 def validCertificate(connection):
 	# [???] Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 	cert = connection.get_peer_certificate()
@@ -114,7 +114,7 @@ def validCertificate(connection):
 
 	rxString = r'(?:^|\s)([^.]+\.)?' + common_name.replace('.', '\.')[3:] + '(?:$|\s)'
 	regex = re.compile(rxString)
-	match = regex.match(url.netloc)
+	match = regex.match(url.hostname)
 
 	alt_match = checkAltNames(cert)
 	return (match or alt_match)
@@ -161,13 +161,16 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		# [???] double check to m
 connection = SSL.Connection(context, s)						# [???] For TCP, is socket.SOCK_STREAM necessary?
 
 # TODO: Check if URL contains a specified port, if not, default to 443
+#port = url.port if (url.port is not None) else DEFAULT_PORT
+
+print url.hostname
 try:
-	connection.connect((url.netloc,443))
+	connection.connect((url.hostname,443))
 except socket.error:
 	sys.exit('Socket error!!!')
 
 connection.set_connect_state()					
-connection.set_tlsext_host_name(url.netloc)
+connection.set_tlsext_host_name(url.hostname)
 
 # ./scurl --crlfile ./sanity/data/sr.pem https://revoked.grc.com/
 if options.crlfile is not None:
@@ -175,14 +178,22 @@ if options.crlfile is not None:
     #crl = "".join(_crl_file.readlines())
 
     # CHECK IF CRL FILE IS VALID !!!!!!!!!!!!!!
+    print "trying..."
+    try:
+    	crl_buffer = open(options.crlfile, 'r').read()
+    	print "tried..."
+    except IOError:
+    	sys.exit(':(')
 
-	crl_buffer = open(options.crlfile, 'r').read()
-	crl_object = crypto.load_crl(crypto.FILETYPE_PEM, crl_buffer)
-	revoked_objects = crl_object.get_revoked()
-	scurl_data["revoked"] = revoked_objects
+    print "lol"
+    crl_object = crypto.load_crl(crypto.FILETYPE_PEM, crl_buffer)
+    revoked_objects = crl_object.get_revoked()
+    scurl_data["revoked"] = revoked_objects
 
 	#isRevoked(connection)):
 	#sys.exit('Revoked bitch')
+
+#print scurl_data["revoked"]
 
 try:
 	connection.do_handshake()
@@ -192,8 +203,10 @@ except SSL.Error:
 if not validCertificate(connection):
 	sys.exit('Name issue')
 
+print request(url.hostname, url.path)
+
 try:
-	connection.sendall(request(url.netloc, url.path))
+	connection.sendall(request(url.hostname, url.path))
 except SSL.Error:
 	sys.exit('Error via sendall!!!')
 
@@ -226,6 +239,7 @@ sys.exit(0)	# [???] Is this neccessary?
 #    FYI with PPK it should be fine even if there's some other error with the certificate? (wrong host, subdomain, etc) yes
 # 3. Implement allowing for stale certs
 # 4. Check for revoked certs
+# 5. Check for timeouts
 
 # ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
 
