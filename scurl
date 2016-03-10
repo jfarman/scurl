@@ -95,6 +95,22 @@ def callback(conn, cert, errnum, depth, result):
 		return True
 	# PREVERIFY OK
 
+def isRevoked(connection):
+    #with open('path_to_the_crl', 'r') as _crl_file:
+    #crl = "".join(_crl_file.readlines())
+
+    # CHECK IF CRL FILE IS VALID !!!!!!!!!!!!!!
+    cert = connection.get_peer_certificate()
+    num = format(cert.get_serial_number(), 'x')
+
+    crl_buffer = open(options.crlfile, 'r').read()
+    crl_object = crypto.load_crl(crypto.FILETYPE_PEM, crl_buffer)
+    revoked_objects = crl_object.get_revoked()
+    for revoked in revoked_objects:
+    	if revoked.get_serial() == num
+    		return True;
+    return False;
+
 def validCertificate(connection):
 	# [???] Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 	cert = connection.get_peer_certificate()
@@ -105,14 +121,7 @@ def validCertificate(connection):
 	match = regex.match(url.netloc)
 
 	alt_match = checkAltNames(cert)
-	if (match or alt_match):
-		return True;
-	if not match:
-		print "common name doesnt match"
-	if not alt_match:
-		print "alt name doesnt match"
-	else:
-		return False;
+	return (match or alt_match)
 
 # *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
@@ -131,11 +140,6 @@ if url.scheme != 'https':
 	sys.exit('Error!')
 
 context = SSL.Context(protocols[options.protocol])	# This is overridden by --cacert
-
-if options.crlfile is not None:
-	print "loading crl"
-	#need to look at signature of CRL file
-	#crypto.load_crl(type, buffer) [???]
 
 # ./scurl --cacert ./sanity/data/stanford.pem https://sha256.badssl.com/
 if options.cacert is not None:
@@ -157,18 +161,17 @@ context.set_verify(SSL.VERIFY_PEER, callback)
 # [???] Do I need to do <<s.settimeout(5)>>? What about socket arguments, ie <<socket(socket.AF_INET, socket.SOCK_STREAM)>>?
 # [???] What about try catch for socket connection (or for handshake), ie <<except SSL.WantReadError>>?
 
-s = socket.socket()
-connection = SSL.Connection(context, s)			# [???] For TCP, is socket.SOCK_STREAM necessary?
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		# [???] double check to make sure this works
+connection = SSL.Connection(context, s)						# [???] For TCP, is socket.SOCK_STREAM necessary?
 
 # TODO: Check if URL contains a specified port, if not, default to 443
-# TODO: FIX SOCKET ERRORS!!!!! SEE BELOW
 try:
 	connection.connect((url.netloc,443))
 except socket.error:
 	sys.exit('Socket error!!!')
 
 connection.set_connect_state()					
-connection.set_tlsext_host_name(url.netloc)		# will this help implement SNI [???]
+connection.set_tlsext_host_name(url.netloc)
 
 try:
 	connection.do_handshake()
@@ -178,11 +181,16 @@ except SSL.Error:
 if not validCertificate(connection):
 	sys.exit('Name issue')
 
+# ./scurl --crlfile ./sanity/data/sr.pem https://revoked.grc.com/
+if ((options.crlfile is not None) and (isRevoked(connection)):
+	sys.exit('Revoked bitch')
+
 try:
 	connection.sendall(request(url.netloc, url.path))
 except SSL.Error:
 	sys.exit('Error via sendall!!!')
 
+# [???] Do I need to do <<s.settimeout(5)>>?
 header = True;
 while 1:
 	try:
@@ -193,24 +201,14 @@ while 1:
 			header = False;
 		sys.stdout.write(block)
 		sys.stdout.flush()
+	# except SSL.WantReadError
 	except SSL.Error:
 		break
 
 connection.shutdown()
 connection.close()
 
-#try:
-    #recvstr = connection.recv(1024)
-#except SSL.WantReadError:
-    #sys.exit('Oops')
-
-#print recvstr
-
-#print "success!"
-
-sys.exit(0)
-
-# [???] Closing the connection?
+sys.exit(0)	# [???] Is this neccessary?
 
 # ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
 # MOST PRESSING ISSUES TO DISCUSS WITH THE TAs DURING OFFICE HOURS
