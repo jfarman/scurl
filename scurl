@@ -60,7 +60,7 @@ def request(host, path):
     # [???] Add a user agent
     # [???] Connection close header (this is good)
     #return '''GET %sHTTP/1.1 \r\nHost: %s\r\nUser-Agent: scurl/cs255\r\nAccept: */*''' % (path, host)
-    return '''GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: scurl/cs255\r\nConnection: close\r\n\r\n''' % (path, host)
+    return '''GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: scurl/cs255\r\nAccept: */*\r\nConnection: close\r\n\r\n''' % (path, host)
 
 
 # [???] How do we get the current time, and how do we factor in the N days?
@@ -163,7 +163,7 @@ connection = SSL.Connection(context, s)						# [???] For TCP, is socket.SOCK_STR
 # TODO: Check if URL contains a specified port, if not, default to 443
 #port = url.port if (url.port is not None) else DEFAULT_PORT
 
-print url.hostname
+#print url.hostname
 try:
 	connection.connect((url.hostname,443))
 except socket.error:
@@ -173,19 +173,17 @@ connection.set_connect_state()
 connection.set_tlsext_host_name(url.hostname)
 
 # ./scurl --crlfile ./sanity/data/sr.pem https://revoked.grc.com/
+# ./scurl --crlfile ./sanity/data/sr.pem https://badssl.com/
 if options.crlfile is not None:
 	#with open('path_to_the_crl', 'r') as _crl_file:
     #crl = "".join(_crl_file.readlines())
 
     # CHECK IF CRL FILE IS VALID !!!!!!!!!!!!!!
-    print "trying..."
     try:
     	crl_buffer = open(options.crlfile, 'r').read()
-    	print "tried..."
     except IOError:
     	sys.exit(':(')
 
-    print "lol"
     crl_object = crypto.load_crl(crypto.FILETYPE_PEM, crl_buffer)
     revoked_objects = crl_object.get_revoked()
     scurl_data["revoked"] = revoked_objects
@@ -202,8 +200,6 @@ except SSL.Error:
 
 if not validCertificate(connection):
 	sys.exit('Name issue')
-
-print request(url.hostname, url.path)
 
 try:
 	connection.sendall(request(url.hostname, url.path))
