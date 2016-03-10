@@ -1,0 +1,1 @@
+--cacert $TEST_DIR/data/stanford.pem https://sha256.badssl.com/

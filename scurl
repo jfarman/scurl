@@ -138,10 +138,12 @@ if url.scheme != 'https':
 context = SSL.Context(protocols[options.protocol])	# This is overridden by --cacert
 
 # ./scurl --cacert ./sanity/data/stanford.pem https://sha256.badssl.com/
+# ./scurl --cacert ./sanity/data/stanford.pem https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_load_verify_locations.html
+
 if options.cacert is not None:
 	context.load_verify_locations(options.cacert)
-	
-context.set_default_verify_paths()
+else:	
+	context.set_default_verify_paths()
 
 if options.ciphers is not None:
 	# Specifies which ciphers to use in the connection.
@@ -160,7 +162,6 @@ context.set_verify(SSL.VERIFY_PEER, callback)
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		# [???] double check to make sure this works
 connection = SSL.Connection(context, s)						# [???] For TCP, is socket.SOCK_STREAM necessary?
 
-# TODO: Check if URL contains a specified port, if not, default to 443
 port = url.port if (url.port is not None) else DEFAULT_PORT
 try:
 	connection.connect((url.hostname,port))
@@ -173,10 +174,6 @@ connection.set_tlsext_host_name(url.hostname)
 # ./scurl --crlfile ./sanity/data/sr.pem https://revoked.grc.com/
 # ./scurl --crlfile ./sanity/data/sr.pem https://badssl.com/
 if options.crlfile is not None:
-	#with open('path_to_the_crl', 'r') as _crl_file:
-    #crl = "".join(_crl_file.readlines())
-
-    # CHECK IF CRL FILE IS VALID !!!!!!!!!!!!!!
     try:
     	crl_buffer = open(options.crlfile, 'r').read()
     except IOError:
@@ -185,11 +182,6 @@ if options.crlfile is not None:
     crl_object = crypto.load_crl(crypto.FILETYPE_PEM, crl_buffer)
     revoked_objects = crl_object.get_revoked()
     scurl_data["revoked"] = revoked_objects
-
-	#isRevoked(connection)):
-	#sys.exit('Revoked bitch')
-
-#print scurl_data["revoked"]
 
 try:
 	connection.do_handshake()
