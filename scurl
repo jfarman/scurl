@@ -16,6 +16,7 @@ from urlparse import urlparse
 # Error code constants found here: http://hugoduncan.org/austenite/src/openssl-sys/lib.rs.html#137-193
 CERTIFICATE_EXPIRED = 10
 scurl_data = {}
+printed_r = False
 
 def initOptionParser():
 	parser.add_option("--tlsv1.0", action="store_const", const="tlsv1.0", dest="protocol", default="tlsv1.2", help="todo")
@@ -99,9 +100,10 @@ def callback(conn, cert, errnum, depth, result):
 	# PREVERIFY OK
 
 def isRevoked(cert):
-    num = format(cert.get_serial_number(), 'x')
+    serial_num = format(cert.get_serial_number(), 'X')
+    serial_num_str = str(serial_num)
     for r in scurl_data["revoked"]:
-    	if r.get_serial() == num:
+    	if r.get_serial() == serial_num_str:
     		return True
     return False
 
@@ -204,7 +206,7 @@ while 1:
 			str_arr = block.split("\r\n\r\n", 1)
 			block = str_arr[1]
 			header = False;
-		sys.stdout.write(block)
+		#sys.stdout.write(block)
 		sys.stdout.flush()
 	# except SSL.WantReadError
 	except SSL.Error:
