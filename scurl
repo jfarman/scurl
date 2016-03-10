@@ -9,11 +9,17 @@ from OpenSSL import crypto
 from optparse import OptionParser
 from urlparse import urlparse
 
-# https://curl.haxx.se/docs/manpage.html
-
 # *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
-# Error code constants found here: http://hugoduncan.org/austenite/src/openssl-sys/lib.rs.html#137-193
+protocols = {'tlsv1.0': SSL.TLSv1_METHOD, 'tlsv1.1': SSL.TLSv1_1_METHOD, 'tlsv1.2': SSL.TLSv1_2_METHOD, 'sslv3' : SSL.SSLv3_METHOD}
+
+errors = {
+	'args': "SCURL ERROR: Missing arguments.",
+	'netw': "SCURL ERROR: Could not connect to the request URL",
+	'http': "SCURL ERROR: Please use an https scheme",
+	'cert': "SCURL ERROR: SSL certificate problem: Invalid certificate chain"
+}
+
 CERTIFICATE_EXPIRED = 10
 DEFAULT_PORT = 443
 scurl_data = {}
@@ -92,7 +98,7 @@ def notRevoked(cert):
 def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
-	#print('got certificate: ' + commonname)
+	
 	if (options.crlfile is not None):
 		return notRevoked(cert)
 			
@@ -101,14 +107,11 @@ def callback(conn, cert, errnum, depth, result):
 		#print cert.get_notAfter()
 		return checkStaleCerts(cert)
 	elif errnum != 0:
-		print('Error number: ' + str(errnum))
 		return False
 	else:
 		return True
-	# PREVERIFY OK
 
 def validCertificate(connection):
-	# [???] Connection.get_peer_certificate() VS Connection.get_peer_cert_chain()
 	cert = connection.get_peer_certificate()
 	common_name = cert.get_subject().commonName.decode()
 
@@ -121,24 +124,19 @@ def validCertificate(connection):
 
 # *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .* *. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*. · ° ▪ ° · .*
 
-protocols = {'tlsv1.0': SSL.TLSv1_METHOD, 'tlsv1.1': SSL.TLSv1_1_METHOD, 'tlsv1.2': SSL.TLSv1_2_METHOD, 'sslv3' : SSL.SSLv3_METHOD}
-
 parser = OptionParser()
 initOptionParser()
 (options, args) = parser.parse_args()
 
 if len(args) < 1:
-	sys.exit('Too few arguments!')
+	sys.exit(errors['args'])
 
 url = urlparse(args[0])
 
 if url.scheme != 'https':
-	sys.exit('Error!')
+	sys.exit(errors['http'])
 
 context = SSL.Context(protocols[options.protocol])	# This is overridden by --cacert
-
-# ./scurl --cacert ./sanity/data/stanford.pem https://sha256.badssl.com/
-# ./scurl --cacert ./sanity/data/stanford.pem https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_load_verify_locations.html
 
 if options.cacert is not None:
 	context.load_verify_locations(options.cacert)
@@ -146,8 +144,6 @@ else:
 	context.set_default_verify_paths()
 
 if options.ciphers is not None:
-	# Specifies which ciphers to use in the connection.
-	# The list of ciphers must specify valid ciphers. 
 	context.set_cipher_list(options.ciphers)
 
 # [???] Disabling Old Versions of SSL/TLS? 
@@ -162,11 +158,12 @@ context.set_verify(SSL.VERIFY_PEER, callback)
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		# [???] double check to make sure this works
 connection = SSL.Connection(context, s)						# [???] For TCP, is socket.SOCK_STREAM necessary?
 
+# Unless a port is specified in the url, use the default https port (443)
 port = url.port if (url.port is not None) else DEFAULT_PORT
 try:
 	connection.connect((url.hostname,port))
 except socket.error:
-	sys.exit('Socket error!!!')
+	sys.exit(errors['netw'])
 
 connection.set_connect_state()					
 connection.set_tlsext_host_name(url.hostname)
@@ -186,15 +183,15 @@ if options.crlfile is not None:
 try:
 	connection.do_handshake()
 except SSL.Error:
-	sys.exit('Error!!!')
+	sys.exit(errors['netw'])
 
 if not validCertificate(connection):
-	sys.exit('Name issue')
+	sys.exit(errors['cert'])
 
 try:
 	connection.sendall(request(url.hostname, url.path))
 except SSL.Error:
-	sys.exit('Error via sendall!!!')
+	sys.exit(errors['netw'])
 
 # [???] Do I need to do <<s.settimeout(5)>>?
 header = True;
@@ -223,21 +220,10 @@ sys.exit(0)	# [???] Is this neccessary?
 # 1. Implement try-catch error handling
 # 2. Implement pinned public key option override, check for none [https://curl.haxx.se/libcurl/c/CURLOPT_PINNEDPUBLICKEY.html]
 #    FYI with PPK it should be fine even if there's some other error with the certificate? (wrong host, subdomain, etc) yes
-# 3. Implement allowing for stale certs
-# 4. Check for revoked certs
-# 5. Check for timeouts
-
-# ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
-
-# [?????] Check for issue of non-zero exit code (https://piazza.com/class/ij0804zduh61i7?cid=670)
-# [?????] whats all this then? /scurl https://wrong.hostbadssl.com/
-
-# [?????] socket.gaierror: [Errno 8] nodename nor servname provided (./scurl https://test1.tls-o-matic.com/)
-# [?????] socket.gaierror: [Errno 8] nodename nor servname provided, or not known (./scurl https://bogus.net.zed/)
-# [?????] socket.error: [Errno 61] Connection refused (./scurl https://cpsc.yale.edu/)
-
-# [?????] Figure out what happens when SSL.SysCallError occurs from a recv() call [???]
-# [?????] I'm getting this error even when I should be getting 404 (./scurl https://sha256.badssl.com/does-not-exist.html)
+# 3. # [?????] Check for issue of non-zero exit code (https://piazza.com/class/ij0804zduh61i7?cid=670) 
+# 4. Implement allowing for stale certs
+# 5. Check for revoked certs
+# 6. Check for timeouts
 
 # ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
 
