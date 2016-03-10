@@ -100,13 +100,17 @@ def validCertificate(connection):
 	cert = connection.get_peer_certificate()
 	common_name = cert.get_subject().commonName.decode()
 
-	rxString = r'(?:^|\s)(\w+\.)?' + common_name.replace('.', '\.')[3:] + '(?:$|\s)'
+	rxString = r'(?:^|\s)([^.]+\.)?' + common_name.replace('.', '\.')[3:] + '(?:$|\s)'
 	regex = re.compile(rxString)
 	match = regex.match(url.netloc)
 
 	alt_match = checkAltNames(cert)
 	if (match or alt_match):
 		return True;
+	if not match:
+		print "common name doesnt match"
+	if not alt_match:
+		print "alt name doesnt match"
 	else:
 		return False;
 
