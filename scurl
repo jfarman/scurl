@@ -1,9 +1,11 @@
 #!/usr/bin/env python2.7
 # -*- encoding: utf-8 -*-
+# Author: Jennifer Farman (CS255, Stanford University, Winter 2016)
 
 import re
 import sys
 import socket
+from datetime import datetime, timedelta
 from OpenSSL import SSL
 from OpenSSL import crypto
 from optparse import OptionParser
@@ -15,9 +17,12 @@ protocols = {'tlsv1.0': SSL.TLSv1_METHOD, 'tlsv1.1': SSL.TLSv1_1_METHOD, 'tlsv1.
 
 errors = {
 	'args': "SCURL ERROR: Missing arguments.",
-	'netw': "SCURL ERROR: Could not connect to the request URL",
-	'http': "SCURL ERROR: Please use an https scheme",
-	'cert': "SCURL ERROR: SSL certificate problem: Invalid certificate chain"
+	'netw': "SCURL ERROR: Could not connect to the request URL.",
+	'http': "SCURL ERROR: Please use an https scheme.",
+	'cert': "SCURL ERROR: SSL certificate problem: Invalid certificate chain.",
+	'crlf': "SCURL ERROR: SSL certificate problem: unable to get certificate CRL.",
+	'ppkf': "SCURL ERROR: Could not load the pinned public key file.",
+	'frmt': "SCURL ERROR: Please check the format of the specified arguments."
 }
 
 CERTIFICATE_EXPIRED = 10
@@ -31,25 +36,15 @@ def initOptionParser():
 	parser.add_option("--sslv3", "-3", action="store_const", const="sslv3", dest="protocol", default="tlsv1.2", help="todo")
 
 	# --crlfile <file>
-	# (HTTPS/FTPS) Provide a file using PEM format with a Certificate Revocation List that may specify peer certificates that
-	# are to be considered revoked. If this option is used several times, the last one will be used.
 	parser.add_option("--crlfile", action="store", dest="crlfile")
 
 	# --cacert <CA certificate>
-	# (SSL) Tells curl to use the specified certificate file to verify the peer. The file may contain multiple CA certificates.
-	# The certificate(s) must be in PEM format. Normally curl is built to use a default file for this, so this option is
-	# typically used to alter that default file.
 	parser.add_option("--cacert", action="store", dest="cacert")
 
 	# --allow-state-certs <N>
-	# Tells scurl to accept a certificate C as valid if (a) C is an otherwise valid certificate that has expired
-	# and (b) C expired within the past N days. The argument N to this option must be a nonnegative integer.
-	# If this option is used several times, the last one will be used.
-	parser.add_option("--allow-state-certs", action="store", dest="expiration")
+	parser.add_option("--allow-stale-certs", action="store", dest="expiration")
 
 	# --ciphers <list of ciphers>
-	# (SSL) Specifies which ciphers to use in the connection. The list of ciphers must specify valid ciphers.
-	# Read up on SSL cipher list details on this URL: https://www.openssl.org/docs/apps/ciphers.html
 	parser.add_option("--ciphers", action="store", dest="ciphers")
 
 	# --pinnedpublickey (PPK) <file> (the path to a public key in PEM format)
@@ -71,10 +66,11 @@ def request(host, path):
 
 # [???] How do we get the current time, and how do we factor in the N days?
 def checkStaleCerts(cert):
- 	#if options.cacert is not None:
-		#print "checking for stale certificates"
-	#date time format
- 	return False
+	window = scurl_data["expired"]
+	cert_date = datetime.strptime(cert.get_notAfter(), "%Y%m%d%H%M%SZ")
+	curr_date = datetime.now()
+	delta = curr_date - cert_date
+	return (0 <= int(delta.days) <= int(window))
 
 def checkAltNames(cert):
  	found = False;
@@ -103,9 +99,8 @@ def callback(conn, cert, errnum, depth, result):
 		return notRevoked(cert)
 			
 	if errnum == CERTIFICATE_EXPIRED:
-		#check <if expiration is not None:>
-		#print cert.get_notAfter()
-		return checkStaleCerts(cert)
+		if options.expiration is not None:
+			return checkStaleCerts(cert)
 	elif errnum != 0:
 		return False
 	else:
@@ -146,13 +141,9 @@ else:
 if options.ciphers is not None:
 	context.set_cipher_list(options.ciphers)
 
-# [???] Disabling Old Versions of SSL/TLS? 
-# context.set_options(SSL.OP_NO_SSLv2)
-
-# [???] If no server certificate is sent, because an anonymous cipher is used, SSL_VERIFY_PEER is ignored.
 context.set_verify(SSL.VERIFY_PEER, callback)
 
-# [???] Do I need to do <<s.settimeout(5)>>? What about socket arguments, ie <<socket(socket.AF_INET, socket.SOCK_STREAM)>>?
+# [???] Do I need to do <<s.settimeout(5)>>? 
 # [???] What about try catch for socket connection (or for handshake), ie <<except SSL.WantReadError>>?
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		# [???] double check to make sure this works
@@ -174,16 +165,32 @@ if options.crlfile is not None:
     try:
     	crl_buffer = open(options.crlfile, 'r').read()
     except IOError:
-    	sys.exit(':(')
+    	sys.exit(errors['crlf'])
 
     crl_object = crypto.load_crl(crypto.FILETYPE_PEM, crl_buffer)
     revoked_objects = crl_object.get_revoked()
     scurl_data["revoked"] = revoked_objects
 
+if options.ppkfile is not None:
+    try:
+    	ppk_buffer = open(options.ppkfile, 'r').read()
+    except IOError:
+    	sys.exit(errors['ppkf'])
+    print "todo: do something with the ppl"
+
+if options.expiration is not None:
+	try:
+		num = int(options.expiration)
+		if num < 0:
+			sys.exit(errors['frmt'])
+		scurl_data["expired"] = num
+	except ValueError:
+		sys.exit(errors['frmt'])
+
 try:
 	connection.do_handshake()
 except SSL.Error:
-	sys.exit(errors['netw'])
+	sys.exit(errors['cert'])
 
 if not validCertificate(connection):
 	sys.exit(errors['cert'])
@@ -214,16 +221,14 @@ connection.close()
 sys.exit(0)	# [???] Is this neccessary?
 
 # ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
-# MOST PRESSING ISSUES TO DISCUSS WITH THE TAs DURING OFFICE HOURS
+# TODO LIST
 # ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
 
-# 1. Implement try-catch error handling
 # 2. Implement pinned public key option override, check for none [https://curl.haxx.se/libcurl/c/CURLOPT_PINNEDPUBLICKEY.html]
 #    FYI with PPK it should be fine even if there's some other error with the certificate? (wrong host, subdomain, etc) yes
 # 3. # [?????] Check for issue of non-zero exit code (https://piazza.com/class/ij0804zduh61i7?cid=670) 
 # 4. Implement allowing for stale certs
-# 5. Check for revoked certs
-# 6. Check for timeouts
+# 5. Check for timeouts
 
 # ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
 
