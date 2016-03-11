@@ -18,7 +18,6 @@ protocols = {'tlsv1.0': SSL.TLSv1_METHOD, 'tlsv1.1': SSL.TLSv1_1_METHOD, 'tlsv1.
 errors = {
 	'args': "SCURL ERROR: Missing arguments.",
 	'netw': "SCURL ERROR: Could not connect to the request URL.",
-	'http': "SCURL ERROR: Please use an https scheme.",
 	'cert': "SCURL ERROR: SSL certificate problem: Invalid certificate chain.",
 	'crlf': "SCURL ERROR: SSL certificate problem: unable to get certificate CRL.",
 	'ppkf': "SCURL ERROR: Could not load the pinned public key file.",
@@ -48,20 +47,12 @@ def initOptionParser():
 	# --ciphers <list of ciphers>
 	parser.add_option("--ciphers", action="store", dest="ciphers")
 
-	# --pinnedpublickey (PPK) <file> (the path to a public key in PEM format)
-	# If specified, scurl will only connect to a server if the servers TLS cert is exactly the one contained in the specified file.
-	# Must use the SHA-256 cert fingerprint functionality built into pyOpenSSL to compare the servers cert to the PPK.
-	# If the server sends the scurl client a certificate chain, you should only check that the leaf certificate matches
-	# the pinned public key certificate - ignore any CA certificates that the server sends.
-	# This option overrides the --cacert and --crlfile options. If this option is used several times, the last one will be used.
+	# --pinnedpublickey (PPK) <file>
 	parser.add_option("--pinnedpublickey", action="store", dest="ppkfile")
 	
 	return
 
 def request(host, path):
-    # [???] Add a user agent
-    # [???] Connection close header (this is good)
-    #return '''GET %sHTTP/1.1 \r\nHost: %s\r\nUser-Agent: scurl/cs255\r\nAccept: */*''' % (path, host)
     return '''GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: scurl/cs255\r\nAccept: */*\r\nConnection: close\r\n\r\n''' % (path, host)
 
 def checkStaleCerts(cert):
@@ -99,17 +90,24 @@ def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
 	
+	# If using a pinned public key, check that the leaf certificate
+	# matches the certifcate in the PPK file
 	if (depth == 0 and usingPPK):
 		return isValidPPK(cert)
 	
+	# If using a specified CRL file, check to make sure each certificate
+	# is not on the CRL (this does not apply when using a PPK)
 	if ((options.crlfile is not None) and not usingPPK):
 		return notRevoked(cert)
-			
+	
+	# If the user allows for stale certs, check to make sure each certificate
+	# is within the specified window (this does not apply when using a PPK)	
 	if errnum == CERTIFICATE_EXPIRED:
 		if usingPPK:
 			return false
 		elif options.expiration is not None:
 			return checkStaleCerts(cert)
+	# If any error is returned at any stage in the callback, return false
 	elif errnum != 0:
 		return False
 	else:
@@ -138,9 +136,9 @@ if len(args) < 1:
 url = urlparse(args[0])
 
 if url.scheme != 'https':
-	sys.exit(errors['http'])
+	sys.exit(errors['frmt'])
 
-context = SSL.Context(protocols[options.protocol])	# This is overridden by --cacert
+context = SSL.Context(protocols[options.protocol])
 
 if options.cacert is not None:
 	context.load_verify_locations(options.cacert)
@@ -152,11 +150,8 @@ if options.ciphers is not None:
 
 context.set_verify(SSL.VERIFY_PEER, callback)
 
-# [???] Do I need to do <<s.settimeout(5)>>? 
-# [???] What about try catch for socket connection (or for handshake), ie <<except SSL.WantReadError>>?
-
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		# [???] double check to make sure this works
-connection = SSL.Connection(context, s)						# [???] For TCP, is socket.SOCK_STREAM necessary?
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+connection = SSL.Connection(context, s)
 
 # Unless a port is specified in the url, use the default https port (443)
 port = url.port if (url.port is not None) else DEFAULT_PORT
@@ -168,10 +163,10 @@ except socket.error:
 connection.set_connect_state()					
 connection.set_tlsext_host_name(url.hostname)
 
-# ./scurl --pinnedpublickey ./sanity/data/expired.pem https://expired.badssl.com/
 if options.ppkfile is not None:
     try:
     	ppk_buffer = open(options.ppkfile, 'r').read()
+    	options.ppkfile.close()
     except IOError:
     	sys.exit(errors['ppkf'])
 
@@ -182,6 +177,7 @@ if options.ppkfile is not None:
 if ((options.crlfile is not None) and not usingPPK):
     try:
     	crl_buffer = open(options.crlfile, 'r').read()
+    	options.crlfile.close()
     except IOError:
     	sys.exit(errors['crlf'])
 
@@ -211,7 +207,6 @@ try:
 except SSL.Error:
 	sys.exit(errors['netw'])
 
-# [???] Do I need to do <<s.settimeout(5)>>?
 header = True;
 while 1:
 	try:
@@ -222,24 +217,9 @@ while 1:
 			header = False;
 		sys.stdout.write(block)
 		sys.stdout.flush()
-	# except SSL.WantReadError
 	except SSL.Error:
 		break
 
 connection.shutdown()
 connection.close()
-
-sys.exit(0)	# [???] Is this neccessary?
-
-# ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
-# TODO LIST
-# ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
-
-# 2. Implement pinned public key option override, check for none [https://curl.haxx.se/libcurl/c/CURLOPT_PINNEDPUBLICKEY.html]
-#    FYI with PPK it should be fine even if there's some other error with the certificate? (wrong host, subdomain, etc) yes
-# 3. # [?????] Check for issue of non-zero exit code (https://piazza.com/class/ij0804zduh61i7?cid=670) 
-# 4. Implement allowing for stale certs
-# 5. Check for timeouts
-
-# ▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫▫▪▪▫
 
