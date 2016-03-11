@@ -165,8 +165,8 @@ connection.set_tlsext_host_name(url.hostname)
 
 if options.ppkfile is not None:
     try:
-    	ppk_buffer = open(options.ppkfile, 'r').read()
-    	options.ppkfile.close()
+    	with open(options.ppkfile) as ppkf:
+    		ppk_buffer = ppkf.read()
     except IOError:
     	sys.exit(errors['ppkf'])
 
@@ -176,8 +176,8 @@ if options.ppkfile is not None:
 
 if ((options.crlfile is not None) and not usingPPK):
     try:
-    	crl_buffer = open(options.crlfile, 'r').read()
-    	options.crlfile.close()
+    	with open(options.crlfile) as crlf:
+    		crl_buffer = crlf.read()
     except IOError:
     	sys.exit(errors['crlf'])
 
