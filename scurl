@@ -27,6 +27,7 @@ errors = {
 
 CERTIFICATE_EXPIRED = 10
 DEFAULT_PORT = 443
+usingPPK = False;
 scurl_data = {}
 
 def initOptionParser():
@@ -63,8 +64,6 @@ def request(host, path):
     #return '''GET %sHTTP/1.1 \r\nHost: %s\r\nUser-Agent: scurl/cs255\r\nAccept: */*''' % (path, host)
     return '''GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: scurl/cs255\r\nAccept: */*\r\nConnection: close\r\n\r\n''' % (path, host)
 
-
-# [???] How do we get the current time, and how do we factor in the N days?
 def checkStaleCerts(cert):
 	window = scurl_data["expired"]
 	cert_date = datetime.strptime(cert.get_notAfter(), "%Y%m%d%H%M%SZ")
@@ -91,15 +90,25 @@ def notRevoked(cert):
     		return False
     return True
 
+def isValidPPK(cert):
+	crt_digest = cert.digest("sha256")
+	ppk_digest = scurl_data["ppkey"].digest("sha256")
+	return (crt_digest == ppk_digest)
+
 def callback(conn, cert, errnum, depth, result):
 	certsubject = crypto.X509Name(cert.get_subject())
 	commonname = certsubject.commonName
 	
-	if (options.crlfile is not None):
+	if (depth == 0 and usingPPK):
+		return isValidPPK(cert)
+	
+	if ((options.crlfile is not None) and not usingPPK):
 		return notRevoked(cert)
 			
 	if errnum == CERTIFICATE_EXPIRED:
-		if options.expiration is not None:
+		if usingPPK:
+			return false
+		elif options.expiration is not None:
 			return checkStaleCerts(cert)
 	elif errnum != 0:
 		return False
@@ -159,9 +168,18 @@ except socket.error:
 connection.set_connect_state()					
 connection.set_tlsext_host_name(url.hostname)
 
-# ./scurl --crlfile ./sanity/data/sr.pem https://revoked.grc.com/
-# ./scurl --crlfile ./sanity/data/sr.pem https://badssl.com/
-if options.crlfile is not None:
+# ./scurl --pinnedpublickey ./sanity/data/expired.pem https://expired.badssl.com/
+if options.ppkfile is not None:
+    try:
+    	ppk_buffer = open(options.ppkfile, 'r').read()
+    except IOError:
+    	sys.exit(errors['ppkf'])
+
+    ppk = crypto.load_certificate(crypto.FILETYPE_PEM, ppk_buffer)
+    scurl_data["ppkey"] = ppk
+    usingPPK = True
+
+if ((options.crlfile is not None) and not usingPPK):
     try:
     	crl_buffer = open(options.crlfile, 'r').read()
     except IOError:
@@ -171,14 +189,7 @@ if options.crlfile is not None:
     revoked_objects = crl_object.get_revoked()
     scurl_data["revoked"] = revoked_objects
 
-if options.ppkfile is not None:
-    try:
-    	ppk_buffer = open(options.ppkfile, 'r').read()
-    except IOError:
-    	sys.exit(errors['ppkf'])
-    print "todo: do something with the ppl"
-
-if options.expiration is not None:
+if ((options.expiration is not None) and not usingPPK):
 	try:
 		num = int(options.expiration)
 		if num < 0:
