@@ -1,0 +1,65 @@
+
+=== STANFORD UNIVERSITY   ===
+=== Research Consent Form ===
+
+Protocol Director: Dan Boneh and Henry Corrigan-Gibbs
+Protocol Title: Usability Study of Cryptographic Software Tools
+
+
+DESCRIPTION:  You are invited to participate in a research study on the
+usability of cryptographic libraries and on how API design affects the sort of
+mistakes that programmers typically make. If you agree to participate in this
+study, you will complete the normal CS255 course project. Afterwards, we will
+use the collected source code to understand how to design better cryptographic
+APIs. Whether or not you volunteer to participate in the study, you will
+complete the same CS255 project.
+
+TIME INVOLVEMENT:  Since participation in the study will consist of completing
+the standard CS255 programming project, participation should take no longer
+than is required for the course assignment (10-15 hours).
+
+RISKS AND BENEFITS:  There are no foreseeable risks associated with this study.
+There are no tangible benefits you will receive from participating in this
+study either, other than the knowledge that you have participated in exciting
+computer security research. Your decision whether or not to participate in this
+study will not affect your grade in CS255.
+
+ELIGIBILITY: You must be at least 18 years old to participate in the study.
+  
+PAYMENT:  You will receive no payment for your participation in this study. 
+
+PARTICIPANT'S RIGHTS:  If you have read this form and have decided to
+participate in this project, please understand your participation is voluntary
+and you have the right to withdraw your consent or discontinue participation at
+any time without penalty or loss of benefits to which you are otherwise
+entitled.  The alternative is not to participate. If you opt out of
+participation, you will still be required to complete the programming
+project for the course. The results of this research study may be presented
+at scientific or professional meetings or published in scientific journals.  
+
+CONTACT INFORMATION: 
+Questions: If you have any questions, concerns or complaints about this
+research, its procedures, risks and benefits, contact the Protocol Director,
+Henry Corrigan-Gibbs at (510) 717-1116 or henrycg@stanford.edu. 
+
+Independent Contact:  If you are not satisfied with how this study is being
+conducted, or if you have any concerns, complaints, or general questions about
+the research or your rights as a participant, please contact the Stanford
+Institutional Review Board (IRB) to speak to someone independent of the
+research team at (650) 723-2480 or toll free at (866) 680-2906.  You can also
+write to the Stanford IRB, Stanford University, MC 5579, Palo Alto, CA 94304.
+
+
+By signing this form, you certify that you are at least 18 years old as of
+today's date. The electronic copy of this signed and dated consent form is 
+yours to keep.
+
+Please fill out the following information. Each one of your team members
+should submit a separate signed copy of this form. 
+
+  You may use my source code 
+  in your research study [Yes/No]   : Yes
+
+  SIGNATURE (Type your name)        : Jennifer Farman
+  DATE                              : 03/10/15
+
